@@ -84,7 +84,12 @@ def design_initial_filter(numtaps, bands, desired):
     for n in range(numtaps):
         filter_coeffs[n] = lagrange_interpolation(extremals, E, 2 * np.pi * n / numtaps)
     
-    return filter_coeffs
+    # Digitize coefficients to 0 or 1
+    threshold = np.median(filter_coeffs)
+    digitized_coeffs = (filter_coeffs >= threshold).astype(float)
+    digitized_coeffs = digitized_coeffs * np.sign(filter_coeffs).astype(float)
+    
+    return digitized_coeffs
 
 # Define Function for Adaptive Filtering (LMS Algorithm)
 def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_iterations):
@@ -100,7 +105,12 @@ def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_ite
         output_signal[n] = y
         error_signal[n] = e
 
-    return output_signal, error_signal, filter_coeffs
+    # Digitize final filter coefficients to 0 or 1
+    threshold = np.median(filter_coeffs)
+    digitized_final_coeffs = (filter_coeffs >= threshold).astype(float)
+    digitized_final_coeffs = digitized_final_coeffs * np.sign(filter_coeffs).astype(float)
+
+    return output_signal, error_signal, digitized_final_coeffs
 
 # Define Function to Generate Signals
 def generate_signals(num_iterations, input_freq, noise_level, sampling_freq):
@@ -232,10 +242,10 @@ def run_filter(sampling_freq, numtaps, bands, desired, weights, mu, num_iteratio
     plt.grid()
 
     plt.subplot(4, 1, 4)
-    plt.plot(np.abs(np.fft.fft(output_signal)), label='Output Signal (Final Digitized Coefficients)')
+    plt.plot(np.abs(np.fft.fft(output_signal)), label='Output Signal')
     plt.plot(np.abs(np.fft.fft(desired_signal)), label='Desired Signal', linestyle='--')
     plt.plot(np.abs(np.fft.fft(input_signal)), label='Input Signal', linestyle=':')
-    plt.title('Output, Desired, and Input Signals (FFT)')
+    plt.title('Output, Desired, and Input Signals')
     plt.xlabel('Frequency Bin')
     plt.ylabel('Magnitude')
     plt.legend()
@@ -253,5 +263,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
