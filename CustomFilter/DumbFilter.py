@@ -16,7 +16,7 @@ def choose_implementation():
 
 # Step 2: Define Function to Parse Command Line Arguments
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Adaptive filter using Parks-McClellan algorithm")
+    parser = argparse.ArgumentParser(description="Adaptive filter using iterative optimization")
     parser.add_argument('--sampling_freq', type=int, required=True, help='Sampling frequency')
     parser.add_argument('--numtaps', type=int, required=True, help='Number of filter taps (filter length)')
     parser.add_argument('--bands', type=float, nargs='+', required=True, help='Frequency bands')
@@ -29,51 +29,51 @@ def parse_arguments():
     return parser.parse_args()
 
 
-# Step 3: Define Function for Initial Filter Design Using Iterative Optimization
+# Step 3: Define Function for Initial Filter Design Using Simplified Parks-McClellan Algorithm
 def design_initial_filter(sampling_freq, numtaps, bands, desired, weights):
     start_time = time.time()
 
-    # Convert normalized bands to actual frequencies
-    bands_hz = [b * sampling_freq / 2 for b in bands]
+    # Normalize bands to Nyquist frequency (0 to 1)
+    norm_bands = [b * 2 / sampling_freq for b in bands]
 
     # Initialize the filter coefficients with small random values
     filter_coeffs = np.random.uniform(-0.1, 0.1, numtaps)
 
-    # Iterative optimization (basic version)
-    for _ in range(100):  # Increase the number of iterations for better convergence
+    # Simplified heuristic optimization
+    for _ in range(200):  # Increase the number of iterations for better convergence
         error = np.zeros(numtaps)
         h = np.zeros(numtaps)
 
-        for band, gain, weight in zip(bands_hz, desired, weights):
-            # Calculate frequency indices
-            band_indices = np.linspace(band - 0.5 * sampling_freq, band + 0.5 * sampling_freq, numtaps, endpoint=False)
-            band_indices = np.clip(band_indices, 0, sampling_freq - 1).astype(int)
-
+        for band, gain, weight in zip(norm_bands, desired, weights):
             # Compute ideal frequency response
-            ideal_response = gain * np.exp(1j * 2 * np.pi * band_indices / sampling_freq)
+            ideal_response = gain * np.exp(1j * 2 * np.pi * np.arange(numtaps) * band)
 
             # Compute current filter response
             response = np.zeros(numtaps, dtype=np.complex128)
             for i in range(numtaps):
-                response[i] = np.dot(filter_coeffs, ideal_response)
+                response[i] = np.dot(filter_coeffs, np.exp(1j * 2 * np.pi * np.arange(numtaps) * band))
 
             # Update error and h
             error += weight * (ideal_response - response).real
-            h += weight * (np.exp(1j * 2 * np.pi * band_indices / sampling_freq)).real
+            h += weight * np.exp(1j * 2 * np.pi * np.arange(numtaps) * band).real
 
         # Update filter coefficients
-        filter_coeffs += 0.01 * error / (h + 1e-6)  # Adjust the step size as needed and avoid division by zero
+        filter_coeffs += 0.005 * error / (h + 1e-6)  # Adjust the step size as needed and avoid division by zero
+
+    # Digitize coefficients to 0 or 1
+    threshold = np.median(filter_coeffs)
+    digitized_coeffs = (filter_coeffs >= threshold).astype(float)
+    digitized_coeffs = digitized_coeffs * np.sign(filter_coeffs).astype(float)
 
     elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate filter coefficients: {elapsed_time:.4f} seconds")
+    print(f"Time taken to calculate filter coefficients using simplified Parks-McClellan: {elapsed_time:.4f} seconds")
 
-    return filter_coeffs / np.sum(filter_coeffs)  # Normalize the coefficients
+    return digitized_coeffs / np.sum(digitized_coeffs)  # Normalize the coefficients
 
 
 # Step 4: Define Function for Adaptive Filtering (LMS Algorithm)
-def adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations):
-    filter_coeffs = initial_filter.astype(float).copy()  # Ensure coefficients are in float
-    numtaps = len(initial_filter)
+def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_iterations):
+    numtaps = len(filter_coeffs)
     output_signal = np.zeros(num_iterations)
     error_signal = np.zeros(num_iterations)
 
@@ -91,7 +91,7 @@ def adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_it
         e = desired_signal[n] - y
 
         # Update the filter coefficients with dynamic step size
-        filter_coeffs += 2 * mu * e * x_norm
+        filter_coeffs += mu * e * x_norm
 
         # Store the output and error signals
         output_signal[n] = y
@@ -142,7 +142,7 @@ def gui_implementation():
     samp_freq_entry = tk.Entry(root)
     samp_freq_entry.insert(0, "1024")
     numtaps_entry = tk.Entry(root)
-    numtaps_entry.insert(0, "51")
+    numtaps_entry.insert(0, "101")
     bands_entry = tk.Entry(root)
     bands_entry.insert(0, "0 0.1 0.2 0.5")
     desired_entry = tk.Entry(root)
@@ -150,9 +150,9 @@ def gui_implementation():
     weights_entry = tk.Entry(root)
     weights_entry.insert(0, "1 10")
     mu_entry = tk.Entry(root)
-    mu_entry.insert(0, "0.01")
+    mu_entry.insert(0, "0.005")
     num_iterations_entry = tk.Entry(root)
-    num_iterations_entry.insert(0, "1000")
+    num_iterations_entry.insert(0, "2000")
     input_freq_entry = tk.Entry(root)
     input_freq_entry.insert(0, "5")
     noise_level_entry = tk.Entry(root)
@@ -174,55 +174,30 @@ def gui_implementation():
     root.mainloop()
 
 
-# Step 7: Function to Visualize Parks-McClellan Algorithm
-def visualize_parks_mcclellan(initial_filter, sampling_freq):
+# Step 7: Function to Visualize Filter Frequency Response
+def visualize_filter(filter_coeffs, sampling_freq):
     num_points = 8000  # Number of points for frequency response
     freq_response = np.zeros(num_points, dtype=np.complex128)
     w = np.linspace(0, np.pi, num_points)
 
     for i in range(num_points):
-        freq_response[i] = np.sum(initial_filter * np.exp(-1j * w[i] * np.arange(len(initial_filter))))
+        freq_response[i] = np.sum(filter_coeffs * np.exp(-1j * w[i] * np.arange(len(filter_coeffs))))
 
     # Convert to Hz
     freqs = w * sampling_freq / (2 * np.pi)
 
     plt.figure()
     plt.plot(freqs, 20 * np.log10(np.abs(freq_response)))
-    plt.title('Parks-McClellan Filter Frequency Response')
+    plt.title('Filter Frequency Response')
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Magnitude (dB)')
     plt.grid()
     plt.show()
 
 
-# Step 8: Digitize filter coefficients based on a dynamic threshold (Otsu's method)
+# Step 8: Digitize filter coefficients to 0 or 1
 def digitize_coefficients(coefficients):
-    # Calculate histogram and probabilities
-    hist, bin_edges = np.histogram(coefficients, bins=256, range=(np.min(coefficients), np.max(coefficients)))
-    total = np.sum(hist)
-    sumB = 0
-    wB = 0
-    maximum = 0.0
-    sum1 = np.dot(np.arange(256), hist)
-
-    for i in range(256):
-        wB += hist[i]
-        if wB == 0:
-            continue
-        wF = total - wB
-        if wF == 0:
-            break
-        sumB += i * hist[i]
-        mB = sumB / wB
-        mF = (sum1 - sumB) / wF
-        between = wB * wF * (mB - mF) ** 2
-        if between >= maximum:
-            threshold = i
-            maximum = between
-
-    threshold = bin_edges[threshold]
-
-    # Digitize coefficients
+    threshold = np.median(coefficients)
     digitized_coefficients = (coefficients >= threshold).astype(float)  # Use float instead of int
     digitized_coefficients = digitized_coefficients * np.sign(coefficients).astype(float)  # Maintain the original sign
     return digitized_coefficients
@@ -240,18 +215,29 @@ def run_filter(sampling_freq, numtaps, bands, desired, weights, mu, num_iteratio
     initial_filter = design_initial_filter(sampling_freq, numtaps, bands, desired, weights)
     print("Initial Filter Coefficients:", initial_filter)
 
-    # Visualize the Parks-McClellan Algorithm
-    visualize_parks_mcclellan(initial_filter, sampling_freq)
-
     # Digitize Initial Filter Coefficients
     digitized_initial_filter = digitize_coefficients(initial_filter)
     print("Digitized Initial Filter Coefficients:", digitized_initial_filter)
 
-    # Perform Adaptive Filtering
+    # Visualize the Digitized Initial Filter Frequency Response
+    visualize_filter(digitized_initial_filter, sampling_freq)
+
+    # Perform Adaptive Filtering with Digitized Initial Filter
     output_signal, error_signal, final_coeffs = adaptive_filter_lms(digitized_initial_filter, input_signal,
                                                                     desired_signal, mu, num_iterations)
 
-    print("Final Adaptive Filter Coefficients:", final_coeffs)
+    print("Final Adaptive Filter Coefficients (Before Digitization):", final_coeffs)
+
+    # Digitize Final Filter Coefficients
+    digitized_final_coeffs = digitize_coefficients(final_coeffs)
+    print("Digitized Final Filter Coefficients:", digitized_final_coeffs)
+
+    # Visualize the Digitized Final Filter Frequency Response
+    visualize_filter(digitized_final_coeffs, sampling_freq)
+
+    # Perform Adaptive Filtering with Digitized Final Filter
+    output_signal_digitized, error_signal_digitized, _ = adaptive_filter_lms(digitized_final_coeffs, input_signal,
+                                                                             desired_signal, mu, num_iterations)
 
     # Plot Results
     plt.figure(figsize=(12, 8))
@@ -273,10 +259,10 @@ def run_filter(sampling_freq, numtaps, bands, desired, weights, mu, num_iteratio
     plt.grid()
 
     plt.subplot(3, 1, 3)
-    plt.plot(output_signal, label='Output Signal')
-    plt.plot(desired_signal, label='Desired Signal', linestyle='--')
-    plt.plot(input_signal, label='Input Signal', linestyle=':')
-    plt.title('Output, Desired, and Input Signals')
+    plt.plot(np.abs(np.fft.fft(output_signal_digitized)), label='Output Signal (Final Digitized Coefficients)')
+    plt.plot(np.abs(np.fft.fft(desired_signal)), label='Desired Signal', linestyle='--')
+    plt.plot(np.abs(np.fft.fft(input_signal)), label='Input Signal', linestyle=':')
+    plt.title('Output Signals with Digitized Coefficients')
     plt.xlabel('Sample Index')
     plt.ylabel('Amplitude')
     plt.legend()
@@ -299,3 +285,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
