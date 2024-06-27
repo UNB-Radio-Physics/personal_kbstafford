@@ -31,14 +31,14 @@ nondigitizedadaptive.run_filter(
     sampling_freq=1000
 )
 ```
-### `digitizedcomplex` Module
-The digitizedcomplex module implements an adaptive filter using the LMS algorithm with complex coefficients and includes additional functions for binary LMS and coefficient decimation.
+### `DigitizedAdaptive` Module
+The `DigitizedAdaptive` module implements an adaptive filter using the LMS algorithm with digitized coefficients.
 
 #### Example Usage
 ```python
-from adaptive_filters import digitizedcomplex
+from adaptive_filters import DigitizedAdaptive
 
-digitizedcomplex.run_filter(
+DigitizedAdaptive.run_filter(
     numtaps=101,
     bands=[0, 0.1, 0.2, 0.5],
     desired=[1, 0],
@@ -90,9 +90,7 @@ DumbFilter.run_filter(
 `run_filter(numtaps, bands, desired, weights, mu, num_iterations, input_freq, noise_level, sampling_freq)`: Function to run the filter process.
 
 ###
-#### digitizedcomplex
-
-
+#### DigitizedAdaptive
 
 `choose_implementation()`: Function to ask for implementation choice via a GUI dialog.
 
@@ -100,16 +98,15 @@ DumbFilter.run_filter(
 
 `design_initial_filter(numtaps, bands, desired, weights)`: Function for initial filter design using Parks-McClellan algorithm.
 
-`adaptive_filter_lms_complex(initial_filter, input_signal, desired_signal, mu, num_iterations)`: Function for adaptive filtering using LMS algorithm with complex coefficients.
+`adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations)`: Function for adaptive filtering using LMS algorithm with digitized coefficients.
 
-`generate_signals_complex(num_iterations, input_freq, noise_level, sampling_freq)`: Function to generate input and desired signals with complex noise.
+`generate_signals(num_iterations, input_freq, noise_level, sampling_freq)`: Function to generate input and desired signals.
 
 `gui_implementation()`: GUI implementation to input parameters.
 
 `visualize_parks_mcclellan(initial_filter)`: Function to visualize the Parks-McClellan filter frequency response.
 
-`decimate_coefficients(coefficients)`: Function to decimate filter coefficients to binary values.
-binary_lms_complex(initial_filter, input_signal, desired_signal, mu, num_iterations): Binary LMS algorithm with complex coefficients.
+`visualize_parks_mcclellan(initial_filter)`: Function to visualize the Parks-McClellan filter frequency response.
 
 `run_filter(numtaps, bands, desired, weights, mu, num_iterations, input_freq, noise_level, sampling_freq)`: Function to run the filter process.
 
@@ -140,7 +137,7 @@ To test the adaptive filters using all three types of signals (input signal, des
 ### Testing with nondigitizedadaptive Module
 ```python
 import matplotlib.pyplot as plt
-from adaptive_filters import nondigitizedadaptive, digitizedcomplex, DumbFilter
+from adaptive_filters import nondigitizedadaptive, DigitizedAdaptive, DumbFilter
 
 # Parameters
 numtaps = 101
@@ -155,17 +152,17 @@ sampling_freq = 1000
 
 # Generate Signals
 input_signal_nondigitized, desired_signal_nondigitized = nondigitizedadaptive.generate_signals(num_iterations, input_freq, noise_level, sampling_freq)
-input_signal_digitized, desired_signal_digitized = digitizedcomplex.generate_signals_complex(num_iterations, input_freq, noise_level, sampling_freq)
+input_signal_digitized, desired_signal_digitized = DigitizedAdaptive.generate_signals(num_iterations, input_freq, noise_level, sampling_freq)
 input_signal_dumb, desired_signal_dumb = DumbFilter.generate_signals(num_iterations, input_freq, noise_level, sampling_freq)
 
 # Design Initial Filters
 initial_filter_nondigitized = nondigitizedadaptive.design_initial_filter(numtaps, bands, desired, weights)
-initial_filter_digitized = digitizedcomplex.design_initial_filter(numtaps, bands, desired, weights)
+initial_filter_digitized = DigitizedAdaptive.design_initial_filter(numtaps, bands, desired, weights)
 initial_filter_dumb = DumbFilter.design_initial_filter(numtaps, bands, desired)
 
 # Perform Adaptive Filtering
 output_signal_nondigitized, error_signal_nondigitized, final_coeffs_nondigitized = nondigitizedadaptive.adaptive_filter_lms(initial_filter_nondigitized, input_signal_nondigitized, desired_signal_nondigitized, mu, num_iterations)
-output_signal_digitized, error_signal_digitized, final_coeffs_digitized = digitizedcomplex.adaptive_filter_lms_complex(initial_filter_digitized, input_signal_digitized, desired_signal_digitized, mu, num_iterations)
+output_signal_digitized, error_signal_digitized, final_coeffs_digitized = DigitizedAdaptive.adaptive_filter_lms(initial_filter_digitized, input_signal_digitized, desired_signal_digitized, mu, num_iterations)
 output_signal_dumb, error_signal_dumb, final_coeffs_dumb = DumbFilter.adaptive_filter_lms(initial_filter_dumb, input_signal_dumb, desired_signal_dumb, mu, num_iterations)
 
 # Plot Signals
@@ -174,7 +171,7 @@ plt.figure(figsize=(12, 8))
 # Input Signals
 plt.subplot(3, 1, 1)
 plt.plot(input_signal_nondigitized, label='Input Signal (Nondigitized)')
-plt.plot(input_signal_digitized.real, label='Input Signal (Digitized Real)', linestyle='--')
+plt.plot(input_signal_digitized, label='Input Signal (Digitized)', linestyle='--')
 plt.plot(input_signal_dumb, label='Input Signal (Dumb)', linestyle=':')
 plt.title('Input Signals')
 plt.xlabel('Sample Index')
@@ -184,7 +181,7 @@ plt.legend()
 # Desired Signals
 plt.subplot(3, 1, 2)
 plt.plot(desired_signal_nondigitized, label='Desired Signal (Nondigitized)')
-plt.plot(desired_signal_digitized.real, label='Desired Signal (Digitized Real)', linestyle='--')
+plt.plot(desired_signal_digitized, label='Desired Signal (Digitized)', linestyle='--')
 plt.plot(desired_signal_dumb, label='Desired Signal (Dumb)', linestyle=':')
 plt.title('Desired Signals')
 plt.xlabel('Sample Index')
@@ -193,9 +190,10 @@ plt.legend()
 
 # Output Signals
 plt.subplot(3, 1, 3)
-plt.plot(output_signal_nondigitized, label='Output Signal (Nondigitized)')
-plt.plot(output_signal_digitized.real, label='Output Signal (Digitized Real)', linestyle='--')
-plt.plot(output_signal_dumb, label='Output Signal (Dumb)', linestyle=':')
+plt.plot(np.abs(np.fft.fft(output_signal_nondigitized)), label='Output Signal (Nondigitized)')
+plt.plot(np.abs(np.fft.fft(output_signal_digitized)), label='Output Signal (Digitized)', linestyle='--')
+plt.plot(np.abs(np.fft.fft(output_signal_dumb)), label='Output Signal (Dumb)', linestyle=':')
+plt.plot(np.abs(np.fft.fft(desired_signal_nondigitized)), label='Desired Signal')
 plt.title('Output Signals')
 plt.xlabel('Sample Index')
 plt.ylabel('Amplitude')
