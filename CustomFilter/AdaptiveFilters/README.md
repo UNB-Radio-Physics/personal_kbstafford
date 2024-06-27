@@ -1,6 +1,6 @@
 # Adaptive Filters
 
-A package for adaptive filters using LMS and Parks-McClellan algorithms. This package includes two modules: `nondigitizedadaptive` and `digitizedcomplex`.
+A package for adaptive filters using LMS and Parks-McClellan algorithms. This package includes three modules: `nondigitizedadaptive`, `DigitizedAdaptive`, and `DumbFilter`.
 
 ## Installation
 
