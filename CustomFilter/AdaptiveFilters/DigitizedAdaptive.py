@@ -31,7 +31,7 @@ def design_initial_filter(numtaps, bands, desired, weights):
     start_time = time.time()
     initial_filter = remez(numtaps, bands, desired, weight=weights)
     elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate filter coefficients: {elapsed_time:.4f} seconds")
+    print(f"Time taken to calculate initial filter coefficients of digitized adaptive filter: {elapsed_time:.4f} seconds")
     return initial_filter
 
 # Step 4: Function to Digitize Coefficients
@@ -42,6 +42,7 @@ def digitize_coefficients(coefficients):
 
 # Step 5: Define Function for Adaptive Filtering (LMS Algorithm)
 def adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations):
+    start_time = time.time()
     filter_coeffs = initial_filter.copy()
     numtaps = len(initial_filter)
     output_signal = np.zeros(num_iterations)
@@ -55,7 +56,9 @@ def adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_it
         filter_coeffs = digitize_coefficients(filter_coeffs)  # Digitize coefficients
         output_signal[n] = y
         error_signal[n] = e
-
+        
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to calculate final filter coefficients of digitized adaptive filter: {elapsed_time:.4f} seconds")
     return output_signal, error_signal, filter_coeffs
 
 # Step 6: Define Function to Generate Signals

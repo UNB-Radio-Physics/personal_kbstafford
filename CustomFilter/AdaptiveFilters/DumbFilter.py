@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import messagebox
 import argparse
+import time
 
 # Function to ask for implementation choice
 def choose_implementation():
@@ -42,6 +43,7 @@ def lagrange_interpolation(x, y, xi):
 
 # Parks-McClellan Algorithm for Initial Filter Design
 def design_initial_filter(numtaps, bands, desired):
+    start_time = time.time()
     bands = [(bands[i], bands[i+1]) for i in range(0, len(bands), 2)]
     desired = [desired[i] for i in range(len(desired))]
     
@@ -89,10 +91,14 @@ def design_initial_filter(numtaps, bands, desired):
     digitized_coeffs = (filter_coeffs >= threshold).astype(float)
     digitized_coeffs = digitized_coeffs * np.sign(filter_coeffs).astype(float)
     
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to calculate initial filter coefficients of digitized dumb filter: {elapsed_time:.4f} seconds")
     return digitized_coeffs
+
 
 # Define Function for Adaptive Filtering (LMS Algorithm)
 def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_iterations):
+    start_time = time.time()
     numtaps = len(filter_coeffs)
     output_signal = np.zeros(num_iterations)
     error_signal = np.zeros(num_iterations)
@@ -109,8 +115,11 @@ def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_ite
     threshold = np.median(filter_coeffs)
     digitized_final_coeffs = (filter_coeffs >= threshold).astype(float)
     digitized_final_coeffs = digitized_final_coeffs * np.sign(filter_coeffs).astype(float)
-
+    
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to calculate final filter coefficients of digitized dumb filter: {elapsed_time:.4f} seconds")
     return output_signal, error_signal, digitized_final_coeffs
+
 
 # Define Function to Generate Signals
 def generate_signals(num_iterations, input_freq, noise_level, sampling_freq):

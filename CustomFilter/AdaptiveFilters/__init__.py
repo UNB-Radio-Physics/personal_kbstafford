@@ -1,3 +1,4 @@
 from .nondigitizedadaptive import *
-from .digitizedcomplex import *
+from .DigitizedAdaptive import *
 from .DumbFilter import *
+
