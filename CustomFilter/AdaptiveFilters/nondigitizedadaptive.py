@@ -108,11 +108,11 @@ def gui_implementation():
     num_iterations_entry = tk.Entry(root)
     num_iterations_entry.insert(0, "1000")
     input_freq_entry = tk.Entry(root)
-    input_freq_entry.insert(0, "5")
+    input_freq_entry.insert(0, "5000000")
     noise_level_entry = tk.Entry(root)
     noise_level_entry.insert(0, "0.1")
     sampling_freq_entry = tk.Entry(root)
-    sampling_freq_entry.insert(0, "1000")  # Default sampling frequency
+    sampling_freq_entry.insert(0, "100000000")  # Default sampling frequency
 
     numtaps_entry.grid(row=0, column=1)
     bands_entry.grid(row=1, column=1)

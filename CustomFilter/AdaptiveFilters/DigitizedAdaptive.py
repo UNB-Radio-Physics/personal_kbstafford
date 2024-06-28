@@ -4,6 +4,12 @@ from scipy.signal import remez, freqz
 import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import simpledialog, messagebox
+import argparse
+import numpy as np
+from scipy.signal import remez, freqz
+import matplotlib.pyplot as plt
+import tkinter as tk
+from tkinter import messagebox
 import time
 
 # Step 1: Function to ask for implementation choice
@@ -24,15 +30,27 @@ def parse_arguments():
     parser.add_argument('--num_iterations', type=int, required=True, help='Number of iterations for adaptation')
     parser.add_argument('--input_freq', type=float, required=True, help='Frequency of input signal')
     parser.add_argument('--noise_level', type=float, required=True, help='Noise level in the input signal')
+    parser.add_argument('--sampling_freq', type=float, required=True, help='Sampling frequency')
     return parser.parse_args()
 
 # Step 3: Define Function for Initial Filter Design Using Parks-McClellan Algorithm
-def design_initial_filter(numtaps, bands, desired, weights):
+def design_initial_filter(numtaps, bands, desired, weights, sampling_freq):
+    # Normalize frequency bands to the Nyquist frequency
+    nyquist = sampling_freq / 2.0
+    normalized_bands = [b / nyquist for b in bands]
+    
+    # Ensure bands are within the range [0, 1]
+    assert all(0 <= b <= 1 for b in normalized_bands), "Bands must be in the range [0, 1] after normalization"
+    
     start_time = time.time()
-    initial_filter = remez(numtaps, bands, desired, weight=weights)
-    elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate initial filter coefficients of digitized adaptive filter: {elapsed_time:.4f} seconds")
-    return initial_filter
+    try:
+        initial_filter = remez(numtaps, normalized_bands, desired, weight=weights)
+        elapsed_time = time.time() - start_time
+        print(f"Time taken to calculate initial filter coefficients of digitized adaptive filter: {elapsed_time:.4f} seconds")
+        return initial_filter
+    except ValueError as e:
+        print(f"Error in remez: {e}")
+        return None
 
 # Step 4: Function to Digitize Coefficients
 def digitize_coefficients(coefficients):
@@ -42,6 +60,9 @@ def digitize_coefficients(coefficients):
 
 # Step 5: Define Function for Adaptive Filtering (LMS Algorithm)
 def adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations):
+    if initial_filter is None:
+        return None, None, None
+    
     start_time = time.time()
     filter_coeffs = initial_filter.copy()
     numtaps = len(initial_filter)
@@ -112,11 +133,11 @@ def gui_implementation():
     num_iterations_entry = tk.Entry(root)
     num_iterations_entry.insert(0, "1000")
     input_freq_entry = tk.Entry(root)
-    input_freq_entry.insert(0, "5")
+    input_freq_entry.insert(0, "5000000")
     noise_level_entry = tk.Entry(root)
     noise_level_entry.insert(0, "0.1")
     sampling_freq_entry = tk.Entry(root)
-    sampling_freq_entry.insert(0, "1000")  # Default sampling frequency
+    sampling_freq_entry.insert(0, "100000000")  # Default sampling frequency
 
     numtaps_entry.grid(row=0, column=1)
     bands_entry.grid(row=1, column=1)
@@ -134,8 +155,10 @@ def gui_implementation():
     root.mainloop()
 
 # Step 8: Function to Visualize Parks-McClellan Algorithm
-def visualize_parks_mcclellan(initial_filter):
+def visualize_parks_mcclellan(initial_filter, sampling_freq):
+    nyquist = sampling_freq / 2.0
     w, h = freqz(initial_filter, worN=8000)
+    w = w / np.pi * nyquist  # Normalize frequency to the Nyquist frequency
     plt.figure()
     plt.plot(w, 20 * np.log10(abs(h)))
     plt.title('Parks-McClellan Filter Frequency Response')
@@ -150,52 +173,54 @@ def run_filter(numtaps, bands, desired, weights, mu, num_iterations, input_freq,
     input_signal, desired_signal = generate_signals(num_iterations, input_freq, noise_level, sampling_freq)
 
     # Design Initial Filter
-    initial_filter = design_initial_filter(numtaps, bands, desired, weights)
+    initial_filter = design_initial_filter(numtaps, bands, desired, weights, sampling_freq)
     print("Initial Filter Coefficients:", initial_filter)
 
-    # Visualize the Parks-McClellan Algorithm
-    visualize_parks_mcclellan(initial_filter)
+    if initial_filter is not None:
+        # Visualize the Parks-McClellan Algorithm
+        visualize_parks_mcclellan(initial_filter, sampling_freq)
 
-    # Perform Adaptive Filtering
-    output_signal, error_signal, final_coeffs = adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations)
+        # Perform Adaptive Filtering
+        output_signal, error_signal, final_coeffs = adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations)
+        print("Final Adaptive Filter Coefficients:", final_coeffs)
 
-    print("Final Adaptive Filter Coefficients:", final_coeffs)
+        # Plot Results with Subtitles
+        plt.figure()
 
-    # Plot Results with Subtitles
-    plt.figure()
+        plt.subplot(4, 1, 1)
+        plt.plot(input_signal, label='Input Signal')
+        plt.title('Input Signal')
+        plt.xlabel('Sample Index')
+        plt.ylabel('Amplitude')
+        plt.legend()
 
-    plt.subplot(4, 1, 1)
-    plt.plot(input_signal, label='Input Signal')
-    plt.title('Input Signal')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Amplitude')
-    plt.legend()
+        plt.subplot(4, 1, 2)
+        plt.plot(desired_signal, label='Desired Signal')
+        plt.title('Desired Signal')
+        plt.xlabel('Sample Index')
+        plt.ylabel('Amplitude')
+        plt.legend()
 
-    plt.subplot(4, 1, 2)
-    plt.plot(desired_signal, label='Desired Signal')
-    plt.title('Desired Signal')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Amplitude')
-    plt.legend()
+        plt.subplot(4, 1, 3)
+        plt.plot(output_signal, label='Output Signal')
+        plt.title('Output Signal')
+        plt.xlabel('Sample Index')
+        plt.ylabel('Amplitude')
+        plt.legend()
 
-    plt.subplot(4, 1, 3)
-    plt.plot(output_signal, label='Output Signal')
-    plt.title('Output Signal')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Amplitude')
-    plt.legend()
+        plt.subplot(4, 1, 4)
+        plt.plot(np.abs(np.fft.fft(output_signal)), label='Output Signal')
+        plt.plot(np.abs(np.fft.fft(desired_signal)), label='Desired Signal')
+        plt.plot(np.abs(np.fft.fft(input_signal)), label='Input Signal')
+        plt.title('Output, Desired, and Input Signals in Frequency Domain')
+        plt.xlabel('Frequency Bin')
+        plt.ylabel('Magnitude')
+        plt.legend()
 
-    plt.subplot(4, 1, 4)
-    plt.plot(np.abs(np.fft.fft(output_signal)), label='Output Signal')
-    plt.plot(np.abs(np.fft.fft(desired_signal)), label='Desired Signal')
-    plt.plot(np.abs(np.fft.fft(input_signal)), label='Input Signal')
-    plt.title('Output, Desired, and Input Signals')
-    plt.xlabel('Sample Index')
-    plt.ylabel('Amplitude')
-    plt.legend()
-
-    plt.tight_layout()
-    plt.show()
+        plt.tight_layout()
+        plt.show()
+    else:
+        print("Failed to design initial filter. Please check the parameters.")
 
 # Main Function
 def main():
@@ -203,7 +228,9 @@ def main():
         gui_implementation()
     else:
         args = parse_arguments()
-        run_filter(args.numtaps, args.bands, args.desired, args.weights, args.mu, args.num_iterations, args.input_freq, args.noise_level, 1000)  # Default sampling frequency
+        run_filter(args.numtaps, args.bands, args.desired, args.weights, args.mu, args.num_iterations, args.input_freq, args.noise_level, args.sampling_freq)
 
 if __name__ == "__main__":
     main()
+
+

@@ -26,6 +26,54 @@ def parse_arguments():
     parser.add_argument('--noise_level', type=float, required=True, help='Noise level in the input signal')
     return parser.parse_args()
 
+# Parks-McClellan Algorithm for Initial Filter Design
+def design_initial_filter(numtaps, bands, desired):
+    start_time = time.time()
+    
+    # Normalize the bands
+    normalized_bands = [b / np.pi for b in bands]
+    print(f"Normalized Bands: {normalized_bands}")
+    
+    # Group normalized bands into pairs
+    band_pairs = [(normalized_bands[i], normalized_bands[i+1]) for i in range(0, len(normalized_bands), 2)]
+    print(f"Band Pairs: {band_pairs}")
+
+    # Initialize extremal frequencies
+    num_extremals = numtaps + 1
+    extremals = np.linspace(0, np.pi, num_extremals)
+    
+    # Initial random filter coefficients
+    filter_coeffs = np.random.uniform(-0.1, 0.1, numtaps)
+    
+    for iteration in range(100):
+        # Compute the error function
+        E = np.zeros_like(extremals)
+        for i, w in enumerate(extremals):
+            H = np.sum(filter_coeffs * np.cos(np.arange(numtaps) * w))
+            for j, band in enumerate(band_pairs):
+                if band[0] <= w <= band[1]:
+                    E[i] = desired[j] - H
+                    break
+        
+        # Find local maxima
+        maxima = (np.diff(np.sign(np.diff(E))) < 0).nonzero()[0] + 1
+        
+        if len(maxima) < num_extremals:
+            maxima = np.concatenate((maxima, [len(E) - 1]))
+        
+        if len(maxima) == 0:
+            print("No local maxima found, breaking the loop.")
+            break
+        
+        extremals = np.interp(np.linspace(0, len(maxima) - 1, num_extremals), np.arange(len(maxima)), maxima)
+    
+    for n in range(numtaps):
+        filter_coeffs[n] = lagrange_interpolation(extremals, E, 2 * np.pi * n / numtaps)
+    
+    elapsed_time = time.time() - start_time
+    print(f"Time taken to calculate initial filter coefficients: {elapsed_time:.4f} seconds")
+    return filter_coeffs
+
 # Utility function to perform Lagrange interpolation
 def lagrange_interpolation(x, y, xi):
     n = len(x)
@@ -36,65 +84,10 @@ def lagrange_interpolation(x, y, xi):
             if j != i:
                 denom = x[i] - x[j]
                 if denom == 0:
-                    continue  # Avoid division by zero
+                    continue
                 term *= (xi - x[j]) / denom
         yi += term
     return yi
-
-# Parks-McClellan Algorithm for Initial Filter Design
-def design_initial_filter(numtaps, bands, desired):
-    start_time = time.time()
-    bands = [(bands[i], bands[i+1]) for i in range(0, len(bands), 2)]
-    desired = [desired[i] for i in range(len(desired))]
-    
-    def initialize_extremal_frequencies(num_extremals):
-        return np.linspace(0, np.pi, num_extremals)
-    
-    def compute_error_function(frequencies, filter_coeffs, desired, bands):
-        E = np.zeros_like(frequencies)
-        for i, w in enumerate(frequencies):
-            H = np.sum(filter_coeffs * np.cos(np.arange(numtaps) * w))
-            for j, band in enumerate(bands):
-                if band[0] <= w <= band[1]:
-                    E[i] = desired[j] - H
-                    break
-        return E
-    
-    def find_local_maxima(E):
-        maxima = (np.diff(np.sign(np.diff(E))) < 0).nonzero()[0] + 1
-        return maxima
-    
-    num_extremals = numtaps + 1
-    extremals = initialize_extremal_frequencies(num_extremals)
-    iteration = 0
-    filter_coeffs = np.random.uniform(-0.1, 0.1, numtaps)
-    
-    while iteration < 100:
-        E = compute_error_function(extremals, filter_coeffs, desired, bands)
-        maxima = find_local_maxima(E)
-        
-        if len(maxima) < num_extremals:
-            maxima = np.concatenate((maxima, [len(E) - 1]))
-        
-        if len(maxima) == 0:
-            print("No local maxima found, breaking the loop.")
-            break
-        
-        extremals = np.interp(np.linspace(0, len(maxima) - 1, num_extremals), np.arange(len(maxima)), maxima)
-        iteration += 1
-
-    for n in range(numtaps):
-        filter_coeffs[n] = lagrange_interpolation(extremals, E, 2 * np.pi * n / numtaps)
-    
-    # Digitize coefficients to 0 or 1
-    threshold = np.median(filter_coeffs)
-    digitized_coeffs = (filter_coeffs >= threshold).astype(float)
-    digitized_coeffs = digitized_coeffs * np.sign(filter_coeffs).astype(float)
-    
-    elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate initial filter coefficients of digitized dumb filter: {elapsed_time:.4f} seconds")
-    return digitized_coeffs
-
 
 # Define Function for Adaptive Filtering (LMS Algorithm)
 def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_iterations):
@@ -111,15 +104,9 @@ def adaptive_filter_lms(filter_coeffs, input_signal, desired_signal, mu, num_ite
         output_signal[n] = y
         error_signal[n] = e
 
-    # Digitize final filter coefficients to 0 or 1
-    threshold = np.median(filter_coeffs)
-    digitized_final_coeffs = (filter_coeffs >= threshold).astype(float)
-    digitized_final_coeffs = digitized_final_coeffs * np.sign(filter_coeffs).astype(float)
-    
     elapsed_time = time.time() - start_time
-    print(f"Time taken to calculate final filter coefficients of digitized dumb filter: {elapsed_time:.4f} seconds")
-    return output_signal, error_signal, digitized_final_coeffs
-
+    print(f"Time taken to calculate final filter coefficients: {elapsed_time:.4f} seconds")
+    return output_signal, error_signal, filter_coeffs
 
 # Define Function to Generate Signals
 def generate_signals(num_iterations, input_freq, noise_level, sampling_freq):
@@ -159,7 +146,7 @@ def gui_implementation():
     tk.Label(root, text="Noise Level:").grid(row=8)
 
     samp_freq_entry = tk.Entry(root)
-    samp_freq_entry.insert(0, "1024")
+    samp_freq_entry.insert(0, "100000000")
     numtaps_entry = tk.Entry(root)
     numtaps_entry.insert(0, "101")
     bands_entry = tk.Entry(root)
@@ -173,7 +160,7 @@ def gui_implementation():
     num_iterations_entry = tk.Entry(root)
     num_iterations_entry.insert(0, "2000")
     input_freq_entry = tk.Entry(root)
-    input_freq_entry.insert(0, "5")
+    input_freq_entry.insert(0, "5000000")
     noise_level_entry = tk.Entry(root)
     noise_level_entry.insert(0, "0.1")
 
@@ -204,7 +191,7 @@ def visualize_filter(filter_coeffs, sampling_freq):
     freqs = w * sampling_freq / (2 * np.pi)
 
     freq_response_magnitude = np.abs(freq_response)
-    freq_response_magnitude[freq_response_magnitude == 0] = 1e-10  # Avoid log of zero
+    freq_response_magnitude[freq_response_magnitude == 0] = 1e-10
 
     plt.figure()
     plt.plot(freqs, 20 * np.log10(freq_response_magnitude))
@@ -220,7 +207,6 @@ def run_filter(sampling_freq, numtaps, bands, desired, weights, mu, num_iteratio
     input_signal = input_signal / np.max(np.abs(input_signal))
     initial_filter = design_initial_filter(numtaps, bands, desired)
     print("Initial Filter Coefficients:", initial_filter)
-    visualize_filter(initial_filter, sampling_freq)
     output_signal, error_signal, final_coeffs = adaptive_filter_lms(initial_filter, input_signal, desired_signal, mu, num_iterations)
     print("Final Adaptive Filter Coefficients:", final_coeffs)
     visualize_filter(final_coeffs, sampling_freq)
@@ -272,6 +258,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
 
